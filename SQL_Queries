@@ -1,0 +1,207 @@
+-----------------------------------------------
+1)
+-----------------------------------------------
+
+SELECT 
+  sql 
+FROM sqlite_master
+where type = 'table'
+
+sql
+CREATE TABLE crime_scene_report ( date integer, type text, description text, city text )
+CREATE TABLE drivers_license ( id integer PRIMARY KEY, age integer, height integer, eye_color text, hair_color text, gender text, plate_number text, car_make text, car_model text )
+CREATE TABLE facebook_event_checkin ( person_id integer, event_id integer, event_name text, date integer, FOREIGN KEY (person_id) REFERENCES person(id) )
+CREATE TABLE interview ( person_id integer, transcript text, FOREIGN KEY (person_id) REFERENCES person(id) )
+CREATE TABLE get_fit_now_member ( id text PRIMARY KEY, person_id integer, name text, membership_start_date integer, membership_status text, FOREIGN KEY (person_id) REFERENCES person(id) )
+CREATE TABLE get_fit_now_check_in ( membership_id text, check_in_date integer, check_in_time integer, check_out_time integer, FOREIGN KEY (membership_id) REFERENCES get_fit_now_member(id) )
+CREATE TABLE solution ( user integer, value text )
+CREATE TABLE income (ssn CHAR PRIMARY KEY, annual_income integer)
+CREATE TABLE person (id integer PRIMARY KEY, name text, license_id integer, address_number integer, address_street_name text, ssn CHAR REFERENCES income (ssn), FOREIGN KEY (license_id) REFERENCES drivers_license (id))
+
+-----------------------------------------------
+2)
+-----------------------------------------------
+
+SELECT 
+  date, description
+FROM crime_scene_report
+WHERE city = 'SQL City'
+	AND type = 'murder'
+
+date	    description
+20180215	REDACTED REDACTED REDACTED
+20180215	Someone killed the guard! He took an arrow to the knee!
+20180115	Security footage shows that there were 2 witnesses. The first witness lives at the last house on "Northwestern Dr". The second witness, named Annabel, lives somewhere on "Franklin Ave".
+
+-----------------------------------------------
+3)
+-----------------------------------------------
+
+WITH CTE_suspect1 AS (
+    SELECT 
+  		id, name
+    FROM person
+    WHERE address_street_name = 'Northwestern Dr'
+    ORDER BY address_number DESC
+    LIMIT 1
+),
+CTE_suspect2 AS (
+    SELECT 
+  		id, name
+    FROM person
+    WHERE address_street_name = 'Franklin Ave'
+      AND name LIKE '%Annabel%'
+),
+suspects AS (
+    SELECT * FROM CTE_suspect1
+    UNION ALL
+    SELECT * FROM CTE_suspect2
+)
+SELECT
+    s.id,
+    s.name,
+    i.transcript
+FROM suspects s
+LEFT JOIN interview i
+    ON i.person_id = s.id;
+
+
+id	  name	          transcript
+14887	Morty Schapiro	I heard a gunshot and then saw a man run out. He had a "Get Fit Now Gym" bag. The membership number on the bag started with "48Z". Only gold members have those bags. The man got into a car with a plate that included "H42W".
+16371	Annabel Miller	I saw the murder happen, and I recognized the killer from my gym when I was working out last week on January the 9th.
+
+-----------------------------------------------
+4)
+-----------------------------------------------
+
+SELECT 
+  check_in_time, check_out_time
+FROM get_fit_now_check_in CHK
+JOIN get_fit_now_member MEM
+ON MEM.id  = CHK.membership_id
+WHERE MEM.person_id = 16371
+	AND check_in_date = '20180109'
+
+check_in_time	check_out_time	check_in_date
+1600	1700	20180109
+
+-----------------------------------------------
+5)
+-----------------------------------------------
+
+SELECT
+	check_in_date, person_id, name, 
+	check_in_time || ' -> ' || check_out_time AS Gym_time
+FROM get_fit_now_check_in CHK
+LEFT JOIN get_fit_now_member MEM
+ON MEM.id = CHK.membership_id
+WHERE 
+(
+  MEM.membership_status = 'gold'
+  AND CHK.membership_id LIKE '48Z%'
+)
+OR 
+(
+	CHK.check_in_date = '20180109'
+	AND 
+	(
+		check_in_time <= 1700 OR 
+		check_out_time >= 1600
+	)
+)
+ORDER BY check_in_date DESC
+
+check_in_date	person_id	name	            Gym_time
+20180109	    15247	    Shondra Ledlow	  957 -> 1164
+20180109	    28073    	Zackary Cabotage	344 -> 518
+20180109	    55662	    Sarita Bartosh	  486 -> 1124
+20180109	    10815	    Adriane Pelligra	461 -> 944
+20180109	    83186	    Burton Grippe	    399 -> 515
+20180109	    31523	    Blossom Crescenzo	273 -> 885
+20180109	    92736	    Carmen Dimick	    367 -> 959
+20180109	    28819	    Joe Germuska	    1600 -> 1730
+20180109	    67318	    Jeremy Bowers	    1530 -> 1700
+20180109	    16371	    Annabel Miller	  1600 -> 1700
+
+-----------------------------------------------
+6)
+-----------------------------------------------
+
+WITH CTE_suspects AS (
+	SELECT
+	  check_in_date, person_id, name, 
+	  check_in_time || ' -> ' || check_out_time AS Gym_time
+	FROM get_fit_now_check_in CHK
+	LEFT JOIN get_fit_now_member MEM
+	ON MEM.id = CHK.membership_id
+	WHERE 
+		  (
+			MEM.membership_status = 'gold'
+			AND CHK.membership_id LIKE '48Z%'
+		  )
+		OR 
+		(
+			CHK.check_in_date = '20180109'
+			AND 
+		  	(
+		  	check_in_time <= 1700 OR 
+		  	check_out_time >= 1600
+			)
+		)
+)
+SELECT * FROM CTE_suspects CTE
+LEFT JOIN interview i
+ON CTE.person_id = i.person_id
+WHERE i.person_id IS NOT NULL
+
+check_in_date	person_id	name	            Gym_time	    person_id	  transcript
+20180109	    28073	    Zackary Cabotage	344 -> 518	  28073	      of tiny white kid gloves: she took up the fan and a pair of the gloves,
+20180109	    92736	    Carmen Dimick	    367 -> 959	  92736	      ‘Yes!’ shouted Alice.
+20180109	    67318	    Jeremy Bowers	    1530 -> 1700	67318	      I was hired by a woman with a lot of money. I don't know her name but I know she's around 5'5" (65") or 5'7" (67"). She has red hair and she drives a Tesla Model S. I know that she attended the SQL Symphony Concert 3 times in December 2017.
+20180109	    16371	    Annabel Miller	  1600 -> 1700	16371	      I saw the murder happen, and I recognized the killer from my gym when I was working out last week on January the 9th.
+
+-----------------------------------------------
+7)
+-----------------------------------------------
+
+WITH CTE_suspect (name, id, street, number) AS(
+	SELECT 
+	name, p.id, address_street_name, address_number
+	FROM income i
+	LEFT JOIN person p
+	ON i.ssn = p.ssn
+	LEFT JOIN drivers_license d
+	ON p.license_id = d.id
+	WHERE annual_income > (SELECT AVG(annual_income) AS avg_income FROM income)
+		AND height BETWEEN 65 AND 67
+		AND hair_color = 'red'
+		AND gender = 'female'
+		AND car_model = 'Model S'
+		AND car_make = 'Tesla'
+)
+SELECT cte.name, cte.id, cte.street, cte.number, event_name, date FROM 
+CTE_suspect cte
+LEFT JOIN interview i
+ON cte.id = i.person_id 
+LEFT JOIN facebook_event_checkin fb
+ON cte.id = fb.person_id
+
+name	            id	  street	    number  event_name	          date
+Red Korb	        78881	Camerata Dr	107	    null	                null
+Miranda Priestly	99716	Golden Ave	1883	  SQL Symphony Concert	20171206
+Miranda Priestly	99716	Golden Ave	1883	  SQL Symphony Concert	20171212
+Miranda Priestly	99716	Golden Ave	1883	  SQL Symphony Concert	20171229
+
+-----------------------------------------------
+8)
+-----------------------------------------------
+
+INSERT INTO solution 
+VALUES  (2, 'Jeremy Bowers'), 
+        (1, 'Miranda Priestly');
+        
+SELECT value FROM solution;
+
+value
+Congrats, you found the murderer! But wait, there's more... If you think you're up for a challenge, try querying the interview transcript of the murderer to find the real villain behind this crime. If you feel especially confident in your SQL skills, try to complete this final step with no more than 2 queries. Use this same INSERT statement with your new suspect to check your answer.
+Congrats, you found the brains behind the murder! Everyone in SQL City hails you as the greatest SQL detective of all time. Time to break out the champagne!
